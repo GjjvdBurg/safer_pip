@@ -15,59 +15,124 @@
 #                                                                            #
 ##############################################################################
 
+###### Constants ######
+
 # Define pip command
-PIP=pip
-# Define unzip command
+PIP="pip"
+# Define unzip and tar command
 UNZIP=unzip
+TAR=tar
 # Get package name
 pkgname=$1
-# Temporary directory
+# Temporary and working directory
 TMPDIR=$(mktemp -d)
-
 working_dir=$(pwd)
+# warning url
+url="http://incolumitas.com/2016/06/08/typosquatting-package-managers/"
 
+# Definitions for colour output
+res='\033[1m\033[0m'
+warn() { echo -e "\e[34m$*${res}"; }
+log() { echo -e "\e[32m$*${res}"; }
+err() { echo -e "\e[31m$*${res}"; exit 1; }
+
+###### Downloading package ######
 cd ${TMPDIR}
 
-echo "Downloading package ... "
-${PIP} download --no-binary :all: ${pkgname}
+download() {
+	log "Downloading package ... "
+	${PIP} download --no-binary :all: ${pkgname}
+}
 
-pkgfile=$(find . -iname "${pkgname}*.zip")
-echo "Found package file: ${pkgfile}"
+###### Extracting package ######
+extract() {
+	case "$1" in
+		*.tar.bz2)
+			pkgfile=$(find . -type f -iname "*.tar.gz")
+			log "Found package file: ${pkgfile}"
+			log "Extracting package ... "
+			${TAR} -xvf ${pkgfile}
+			pkgdir=${pkgfile%$".tar.gz"}
+			;;
+		*.tar.gz)
+			pkgfile=$(find . -type f -iname "*.tar.gz")
+			log "Found package file: ${pkgfile}"
+			log "Extracting package ... "
+			${TAR} -xvf ${pkgfile}
+			pkgdir=${pkgfile%$".tar.gz"}
+			;;
+		*.zip)
+			pkgfile=$(find . -type f -iname "*.zip")
+			log "Found package file: ${pkgfile}"
+			log "Extracting package ... "
+			${UNZIP} ${pkgfile}
+			pkgdir=${pkgfile%$".zip"}
+			;;
+		*)
+			err "Couldn't identify package file.\n"\
+				"Please report this error on: "\
+				"https://github.com/GjjvdBurg/safer_pip"
+			;;
+	esac
+}
 
-echo "Extracting package ... "
-${UNZIP} ${pkgfile}
-pkgdir=$(basename -s .zip ${pkgfile})
-cd "${TMPDIR}/${pkgdir}"
+check() {
+	cd "${TMPDIR}/${pkgdir}"
+	# Ask user to check setup.py
+	read -r -p $'\e[34mEdit setup.py? [Y/n]\e[0m ' response
+	if [ "${response}" = "" ]; then
+		response='Y'
+	fi
+	case $response in
+		[yY])
+			"${EDITOR:-vi}" setup.py
+			;;
+		[nN])
+			warn "This is really unsafe, see\n${url}"
+			;;
+	esac
+}
 
-# Ask user to check setup.py
-read -r -p "Edit setup.py? [Y/n] " response
-if [ "${response}" = "" ]; then
-	response='Y'
-fi
-case $response in
-	[yY])
-		"${EDITOR:-vi}" setup.py
-		;;
-	[nN])
-		echo -e "This is really unsafe, see\n"\
-			"http://incolumitas.com/2016/06/08/typosquatting-package-managers/"
-		;;
-esac
+install() {
+	# Ask user to continue installation
+	read -r -p $'\e[34mContinue installing '"${pkgname}? [Y/n]"$'\e[0m '\
+		response
+	if [ "${response}" = "" ]; then
+		response='Y'
+	fi
+	case $response in
+		[yY])
+			cd ${TMPDIR}
+			${PIP} install --user ${pkgfile};;
+	esac
+}
 
+cleanup() {
+	# Cleanup
+	log "Cleaning up ..."
+	cd ${working_dir}
+	rm -rf ${TMPDIR}
+	log "Done."
+}
 
-# Ask user to continue installation
-read -r -p "Continue installing ${pkgname}? [Y/n] " response
-if [ "${response}" = "" ]; then
-	response='Y'
-fi
-case $response in
-	[yY])
-		cd ${TMPDIR}
-		${PIP} install --user ${pkgfile};;
-esac
+run() {
+	download
+	nfiles=$(find . -type f | wc -l)
+	if [ "$nfiles" -gt "1" ];
+	then
+		deps=$(ls | grep -v ${pkgname})
+		err "Unfortunately this package has dependencies, which\n"\
+			"I can't handle reliably yet. Please install the\n"\
+			"dependencies separately first.\n"\
+			"I'm working on a better solution.\n"\
+			"The dependencies are:\n${deps}\n"
+	else
+		fname=$(find . -type f)
+		extract ${fname}
+		check
+		install
+	fi
+	cleanup
+}
 
-# Cleanup
-echo "Cleaning up ..."
-cd ${working_dir}
-rm -rf ${TMPDIR}
-echo "Done."
+run
