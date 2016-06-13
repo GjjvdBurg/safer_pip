@@ -95,7 +95,7 @@ check() {
 
 install() {
 	# Ask user to continue installation
-	read -r -p $'\e[34mContinue installing '"${pkgname}? [Y/n]"$'\e[0m '\
+	read -r -p $'\e[34mContinue installing '"$1? [Y/n]"$'\e[0m '\
 		response
 	if [ "${response}" = "" ]; then
 		response='Y'
@@ -116,23 +116,32 @@ cleanup() {
 }
 
 run() {
+	extract $1
+	check
+	install $1
+}
+
+main() {
+	# Download the package with its dependencies
 	download
-	nfiles=$(find . -type f | wc -l)
-	if [ "$nfiles" -gt "1" ];
+
+	# First do all the dependencies
+	deps=$(ls | grep -v ${pkgname})
+	for dep in ${deps}
+	do
+		run ${dep}
+		rm ${dep}
+	done
+
+	# The package we want should now be the only one left.
+	fname=$(find . -maxdepth 1 -type f)
+	if [ ! "${fname}" = "" ]
 	then
-		deps=$(ls | grep -v ${pkgname})
-		err "Unfortunately this package has dependencies, which\n"\
-			"I can't handle reliably yet. Please install the\n"\
-			"dependencies separately first.\n"\
-			"I'm working on a better solution.\n"\
-			"The dependencies are:\n${deps}\n"
-	else
-		fname=$(find . -type f)
-		extract ${fname}
-		check
-		install
+		run ${fname}
 	fi
+
+	# Run the cleanup
 	cleanup
 }
 
-run
+main

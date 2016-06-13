@@ -17,7 +17,5 @@ Note that this script installs packages to the users directory by default by
 using the ``--user`` flag to ``pip install``. This way, it shouldn't be 
 necessary to run pip with administrator privileges.
 
-Warning: This is preliminary software. Currently the script can't handle 
-packages with dependencies, since there's no way to know if there is an order 
-in which the dependencies need to be installed. The best way to solve this 
-would be to use ``pip`` as a Python module, and work it out from there.
+This is alpha software, please use at your own risk and let me know if you 
+find any bugs.
