@@ -130,6 +130,7 @@ main() {
 	for dep in ${deps}
 	do
 		run ${dep}
+		cd ${TMPDIR}
 		rm ${dep}
 	done
 
